@@ -1,0 +1,96 @@
+# AE6 test build workflow
+#
+# Why this workflow exists:
+#   - The source tree does not contain the CarPlay accessory identity
+#     (certificate.p7b / leaf.cer / private.x963) required for a working
+#     local CarPlay session.
+#   - Those files are present in the official unsigned IPA published by the
+#     upstream project. SOURCE-BUILD.md explicitly says they must not be
+#     committed to a public repository.
+#   - Therefore this workflow downloads the official 1.0.5 IPA at build time,
+#     extracts only those three identity files, stages them into
+#     App/BundledIdentity/ (which generate_project.py bundles into the app),
+#     builds an unsigned IPA, and uploads it as a CI artifact.
+#
+# 中文说明：
+#   - 源码仓库不含 CarPlay 配件认证身份，缺少它们编译出的包无法真正建立
+#     CarPlay 会话。
+#   - 官方未签名 IPA 里有这三个身份文件，但 SOURCE-BUILD.md 明确要求不要
+#     提交到公开仓库。
+#   - 所以这里在 CI 运行时下载官方 1.0.5 IPA，只提取这三个文件放入
+#     App/BundledIdentity/，由 generate_project.py 打进测试包；产物作为
+#     Actions artifact 下载，不需要把身份文件提交进仓库。
+
+name: Build CarWithin AE6 test IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ae6-test
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout ae6-test
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Fetch official v1.0.5 IPA for accessory identity
+        # Extract only the three identity files from the upstream release.
+        # 只从官方包提取身份文件，不提交、不缓存、不写入仓库。
+        run: |
+          set -euo pipefail
+          IPA_URL="https://github.com/xmz28/CarWithin/releases/download/v1.0.5/CarWithin-1.0.5-unsigned.ipa"
+          curl -fL --retry 3 -o official.ipa "$IPA_URL"
+          unzip -q official.ipa \
+            'Payload/TDSCarKit.app/certificate.p7b' \
+            'Payload/TDSCarKit.app/leaf.cer' \
+            'Payload/TDSCarKit.app/private.x963'
+          mkdir -p App/BundledIdentity
+          cp Payload/TDSCarKit.app/certificate.p7b App/BundledIdentity/
+          cp Payload/TDSCarKit.app/leaf.cer App/BundledIdentity/
+          cp Payload/TDSCarKit.app/private.x963 App/BundledIdentity/
+          ls -l App/BundledIdentity
+
+      - name: Regenerate Xcode project
+        # The generator picks up App/BundledIdentity/* as bundle resources.
+        # 生成脚本会把 App/BundledIdentity/ 下的文件加入工程资源。
+        run: python3 Tools/generate_project.py
+
+      - name: Build unsigned arm64 IPA
+        # CODE_SIGNING_ALLOWED=NO produces an unsigned IPA; sign it locally
+        # with Sideloadly / AltStore after downloading the artifact.
+        # 产物是未签名 IPA，下载后用 Sideloadly / AltStore 自行签名安装。
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project TDSCarKit.xcodeproj \
+            -scheme TDSCarKit \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath build/derived
+
+          APP="$(find build/derived/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          test -n "$APP"
+          mkdir -p build/ipa/Payload
+          cp -R "$APP" build/ipa/Payload/
+          cd build/ipa
+          zip -q -r ../CarWithin-AE6-test.ipa Payload
+          ls -lh ../CarWithin-AE6-test.ipa
+
+      - name: Upload test IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: CarWithin-AE6-test
+          path: build/CarWithin-AE6-test.ipa
+          if-no-files-found: error
