@@ -4,7 +4,7 @@ import Foundation
 import VideoToolbox
 
 // Original CarWithin v1.0.3 6.2-inch stack, isolated from SE+ adaptations.
-// Connection prelude adds IP discovery; an optional BMS canvas precedes original scaling.
+// Only the connection prelude adds optional IP discovery and reuses its socket.
 enum Zeeho62Legacy {
     // BEGIN ORIGINAL62 output
     /// Runs codecs and UDP writes off the CarPlay receive queue.
@@ -15,14 +15,6 @@ enum Zeeho62Legacy {
 
         private let queue = DispatchQueue(label: "CarWithin.zeeho", qos: .userInitiated)
         private var session: Session?
-        private var bmsImage: CGImage?
-        private var bmsConfiguration = ANTBMSCardConfiguration()
-
-        func setBMSOverlay(_ image: CGImage?, configuration: ANTBMSCardConfiguration) {
-            bmsImage = image; bmsConfiguration = configuration
-            let current = session
-            queue.async { current?.setBMSOverlay(image, configuration: configuration) }
-        }
 
         deinit { stop() }
 
@@ -31,11 +23,7 @@ enum Zeeho62Legacy {
             stop()
             let next = Session(queue: queue, localAddress: localAddress, targetAddress: targetAddress, phone: phone, onState: onState, onLog: onLog, requestKeyframe: requestKeyframe)
             session = next
-            let overlay = bmsImage, configuration = bmsConfiguration
-            queue.async {
-                next.setBMSOverlay(overlay, configuration: configuration)
-                next.start()
-            }
+            next.start()
         }
 
         func append(_ data: Data, codec: VideoCodec, keyframe: Bool) {
@@ -70,13 +58,6 @@ enum Zeeho62Legacy {
             private var parameters = VideoParameterSets(codec: .h264)
             private var waitingForIDR = true
             private var latest: CVPixelBuffer?
-            private var bmsCanvas: InstrumentVideoCanvas?
-
-            func setBMSOverlay(_ image: CGImage?, configuration: ANTBMSCardConfiguration) {
-                guard let image else { bmsCanvas = nil; return }
-                if bmsCanvas == nil { bmsCanvas = InstrumentVideoCanvas() }
-                bmsCanvas?.setBMSOverlay(image, configuration: configuration)
-            }
             private lazy var compositor = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
             private var fresh = false
             private let origin = ProcessInfo.processInfo.systemUptime
@@ -86,6 +67,10 @@ enum Zeeho62Legacy {
             private var nextHeartbeat = 0.0
             private var counter: UInt32 = 0
             private var lastReply: Double?
+            // AE6 fixes: actual encode height comes from the PXC negotiation.
+            // Defaults to the original 480 so other Zeeho dashboards are unchanged.
+            // 极核 AE6：编码高度取自 PXC 协商结果；默认 480，其他极核仪表行为不变。
+            private var outputHeight = ZeehoOutput.height
             private var sentPicture = false
             private var status = ""
 
@@ -105,6 +90,9 @@ enum Zeeho62Legacy {
                     do {
                         try connection.start()
                         guard active else { return }
+                        // AE6 fixes: adopt the negotiated height (480/484/488)
+                        // before encoding starts. 极核 AE6：编码开始前采用协商高度。
+                        outputHeight = connection.negotiatedHeight
                         report("仪表已连接，等待 CarPlay 画面…")
                         var first = true
                         var nextFrame = ProcessInfo.processInfo.systemUptime
@@ -134,12 +122,12 @@ enum Zeeho62Legacy {
                                 guard let recovered else { throw TailingError.timeout("等待 H.264 编码画面") }
                                 try connection.sendH264(recovered.data)
                                 first = false
-                                report("正在投屏 · 1024×480 · H.264")
+                                report("正在投屏 · \(ZeehoOutput.width)×\(outputHeight) · H.264")
                                 continue
                             }
                             try connection.sendH264(result.data)
                             first = false
-                            report("正在投屏 · 1024×480 · H.264")
+                            report("正在投屏 · \(ZeehoOutput.width)×\(outputHeight) · H.264")
                         }
                     } catch {
                         if active {
@@ -228,7 +216,10 @@ enum Zeeho62Legacy {
                 do {
                     if encoder == nil {
                         guard now - lastCodecFailure >= 0.5 else { return nil }
-                        encoder = try H264Encoder(width: ZeehoOutput.width, height: ZeehoOutput.height,
+                        // AE6 fixes: use the negotiated height so H.264 dimensions
+                        // match the media configuration sent to the dashboard.
+                        // 极核 AE6：编码高度与回复仪表的媒体配置保持一致。
+                        encoder = try H264Encoder(width: ZeehoOutput.width, height: outputHeight,
                                                   fps: ZeehoOutput.fps, bitrate: 2_500_000) { [weak self] result in
                             guard let self else { return }
                             self.lock.withLock { self.encoded = result }
@@ -259,8 +250,9 @@ enum Zeeho62Legacy {
             }
 
             private func fittedImage(_ image: CVPixelBuffer) throws -> CVPixelBuffer {
-                let width = ZeehoOutput.width, height = ZeehoOutput.height
-                if let bmsCanvas { return try bmsCanvas.fittedImage(image, width: width, height: height) }
+                // AE6 fixes: fit into the negotiated canvas (1024x484 on AE6).
+                // 极核 AE6：按协商后的画布尺寸缩放，AE6 为 1024x484。
+                let width = ZeehoOutput.width, height = outputHeight
                 if CVPixelBufferGetWidth(image) == width, CVPixelBufferGetHeight(image) == height { return image }
                 var buffer: CVPixelBuffer?
                 let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA,
@@ -372,6 +364,15 @@ enum Zeeho62Legacy {
         private var sentH264Prefix = false
         private var mediaStarted = false
         private var configured = false
+
+        // AE6 fixes: the dashboard negotiates 1024x484, while the original
+        // 6.2-inch profile only accepted 480/488. Keep the negotiated height
+        // so the encoder and the PXC reply can use the dashboard's real size.
+        // 极核 AE6 实测：仪表在 PXC 媒体配置里上报 1024x484，原先只接受
+        // 480/488 会导致「与极核配置不符」。这里记录协商后的高度，供
+        // 回复仪表和 H.264 编码器共用，避免回复尺寸与编码尺寸不一致。
+        private(set) var negotiatedHeight: Int = ZeehoOutput.height
+
         private var isZeeho: Bool { profile.isZeeho }
         private var dashboard: String { profile.isZeeho ? "极核" : "台铃" }
 
@@ -706,10 +707,17 @@ enum Zeeho62Legacy {
                     }
                     let width = request.payload.uint16LE(0)
                     let height = request.payload.uint16LE(2)
-                    let validDimensions = isZeeho ? width == 1024 && (height == 480 || height == 488)
+                    // AE6 fixes: accept the 1024x484 media size reported by the
+                    // 2026 AE6 6.2-inch dashboard. 480 and 488 remain accepted
+                    // for previously supported instruments.
+                    // 极核 AE6 实测为 1024x484；保留 480/488 以兼容已有仪表。
+                    let validDimensions = isZeeho ? width == 1024 && [480, 484, 488].contains(height)
                         : width == 480 && height == 272
                     guard validDimensions else {
                         throw TailingError.protocolFailure("仪表媒体尺寸 \(width)×\(height) 与 \(dashboard) 配置不符")
+                    }
+                    if isZeeho {
+                        negotiatedHeight = height
                     }
                     let deadline = Date().addingTimeInterval(5)
                     condition.lock()
@@ -723,11 +731,16 @@ enum Zeeho62Legacy {
                           echoed == signature else { throw TailingError.protocolFailure("媒体身份回显不匹配") }
                     try identity.verify(echoed, huid: huid)
                     payload.appendLE(UInt32(isZeeho ? 2 : 1))
+                    // AE6 fixes: echo the dashboard's negotiated height instead
+                    // of the hardcoded 480, otherwise the dashboard may reject
+                    // the media configuration or render a cropped frame.
+                    // 极核 AE6：必须回应仪表实际上报的 484，而不是写死的 480，
+                    // 否则可能出现媒体配置不匹配或画面裁切。
                     payload.appendLE(UInt16(profile.width))
-                    payload.appendLE(UInt16(profile.height))
+                    payload.appendLE(UInt16(isZeeho ? negotiatedHeight : profile.height))
                     response = 0x11
                     condition.lock(); configured = true; condition.unlock()
-                    log("媒体身份回显校验通过，仪表报告 \(width)×\(height)，回应 \(isZeeho ? "H.264" : "JPEG") / \(profile.width)×\(profile.height)")
+                    log("媒体身份回显校验通过，仪表报告 \(width)×\(height)，回应 \(isZeeho ? "H.264" : "JPEG") / \(profile.width)×\(isZeeho ? negotiatedHeight : profile.height)")
                 case 0x70:
                     condition.lock(); let ready = configured; condition.unlock()
                     guard ready else { throw TailingError.protocolFailure("仪表在配置完成前请求媒体启动") }
