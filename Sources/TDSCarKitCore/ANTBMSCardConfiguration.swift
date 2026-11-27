@@ -3,7 +3,7 @@ import Foundation
 /// Shared card content and scale for the phone and instrument video.
 public struct ANTBMSCardConfiguration: Equatable, Sendable {
     public enum Field: String, CaseIterable, Sendable {
-        case charge, voltage, temperature, current, power, cellDelta
+        case charge, voltage, temperature, current, power, cellDelta, capacity
 
         public var title: String {
             switch self {
@@ -13,12 +13,13 @@ public struct ANTBMSCardConfiguration: Equatable, Sendable {
             case .current: "电流"
             case .power: "功率"
             case .cellDelta: "单体压差"
+            case .capacity: "容量"
             }
         }
 
         public func text(_ reading: ANTBMSReading) -> String {
-            if [.charge, .voltage, .current, .power].contains(self), !reading.available.contains(rawValue) {
-                return self == .charge ? "--%" : self == .voltage ? "--V" : self == .current ? "--A" : "--W"
+            if [.charge, .voltage, .current, .power, .capacity].contains(self), !reading.available.contains(rawValue) {
+                return self == .charge ? "--%" : self == .voltage ? "--V" : self == .current ? "--A" : self == .power ? "--W" : "--/--A"
             }
             switch self {
             case .charge: return "\(reading.stateOfCharge)%"
@@ -27,6 +28,15 @@ public struct ANTBMSCardConfiguration: Equatable, Sendable {
             case .current: return String(format: "%+.1fA", reading.current)
             case .power: return "\(reading.power)W"
             case .cellDelta: return "压差 " + (reading.cellDelta.map { String(format: "%.0fmV", $0 * 1000) } ?? "--mV")
+            case .capacity:
+                // ANT BMS already parses capacityAh (total) and remainingAh
+                // (current) from the protocol. Show remaining/total in the
+                // compact form requested for the dashboard card.
+                // ANT 协议已解析总容量 capacityAh 与当前容量 remainingAh；
+                // 按小程序样式显示「当前/总容量」，例如 116.79/210.0A。
+                guard reading.available.contains("capacity"),
+                      reading.available.contains("remaining") else { return "--/--A" }
+                return String(format: "%.2f/%.1fA", reading.remainingAh, reading.capacityAh)
             }
         }
     }
@@ -52,7 +62,10 @@ public struct ANTBMSCardConfiguration: Equatable, Sendable {
         public var opacity: Double { [0.45, 0.86, 1][rawValue] }
     }
 
-    public static let compactFields: [Field] = [.charge, .voltage, .cellDelta]
+    /// Capacity is included in the compact preset so riders can see the
+    /// remaining/total Ah without enabling every telemetry field.
+    /// 容量加入紧凑预设，用户不用打开全部字段也能看到剩余/总容量。
+    public static let compactFields: [Field] = [.charge, .voltage, .cellDelta, .capacity]
     public private(set) var fields: [Field]
     public var size: Size
     public var position: Position
@@ -64,7 +77,16 @@ public struct ANTBMSCardConfiguration: Equatable, Sendable {
         var seen = Set<Field>()
         let normalized = (savedFields?.compactMap(Field.init(rawValue:)) ?? Field.allCases)
             .filter { seen.insert($0).inserted }
-        fields = normalized.isEmpty ? Field.allCases : normalized
+        var migrated = normalized.isEmpty ? Field.allCases : normalized
+        // Migration: existing users saved the six-field card before capacity
+        // existed. Add the new field once so it is visible without having to
+        // find it in the field switch list. New installs already get all cases.
+        // 迁移：老用户保存的是旧的六字段配置；自动补一次容量字段，
+        // 不需要用户自己去字段开关里找。新安装默认包含全部字段。
+        if savedFields != nil, migrated.count >= 6, !migrated.contains(.capacity) {
+            migrated.append(.capacity)
+        }
+        fields = migrated
         size = sizeRawValue.flatMap(Size.init(rawValue:)) ?? .medium
         position = positionRawValue.flatMap(Position.init(rawValue:)) ?? .topRight
         background = backgroundRawValue.flatMap(Background.init(rawValue:)) ?? .standard
