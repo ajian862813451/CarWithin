@@ -717,7 +717,10 @@ enum Zeeho62Legacy {
                         throw TailingError.protocolFailure("仪表媒体尺寸 \(width)×\(height) 与 \(dashboard) 配置不符")
                     }
                     if isZeeho {
-                        negotiatedHeight = height
+                        // PXC reports dimensions as UInt16; store as Int for
+                        // the encoder and payload helpers.
+                        // PXC 尺寸字段是 UInt16，这里转成 Int 供编码器和载荷使用。
+                        negotiatedHeight = Int(height)
                     }
                     let deadline = Date().addingTimeInterval(5)
                     condition.lock()
