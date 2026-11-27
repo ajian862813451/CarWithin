@@ -8,13 +8,13 @@
 - 显示电量、总压、电流、功率、最高温度和单体压差，压差由有效单体电压最大值减最小值计算，以 mV 显示。容量、MOS 温度、串数、状态和原始保护/告警位位于电池详情。
 - 数据超过五秒未更新时清空实时值，卡片显示等待/失联，不继续展示旧值。电流保留 BMS 的符号；未知温度、单体值显示缺失。
 - 卡片可选四角、三档大小、背景透明度、显示字段及顺序。设置自动保存在本机，预览示例有明确标签，仅用于设置页，不进入实时卡片或视频。
-- 同一张卡片图像显示在手机 CarPlay 预览，并合成进九号五寸/七寸 H.264 输出。九号 4.3 寸、浏览器、极核等输出本次不叠加卡片；画中画是否包含 UIKit 叠层也不作保证。
+- 同一张卡片图像显示在手机 CarPlay 预览，并合成进九号 4.3/5/7 寸及极核 6.2 寸、SE+、AE2 Pro 输出。极核 SE+ 开启卡片时自动转为兼容转码，本次会话保持转码直至重新启动投屏。浏览器等其他输出不叠加卡片；画中画是否包含 UIKit 叠层也不作保证。
 
 本功能不写入电池配置，不发送充放电、均衡或保护控制命令，不保存车辆/电池历史，不改变现有 CarPlay 启动和 Wi-Fi 流程。关闭读取会停止扫描、查询与重连，并移除卡片。开启 bluetooth-central 后，后台通知仍受系统调度和已有后台运行条件限制，不保证终止 App 后继续读取。
 
 ## 代码组织和验证
 
-ANTBMSProtocol 与 ANTBMSCardConfiguration 不依赖 UIKit/CoreBluetooth。ANTBMSClient 在主队列管理用户选择、扫描、订阅、查询、超时与重连。ANTBMSController 独立管理设置和本机卡片，NativeReceiver 将不可变图像及布局串行交给 NinebotOutput，在视频编码前合成。
+ANTBMSProtocol 与 ANTBMSCardConfiguration 不依赖 UIKit/CoreBluetooth。ANTBMSClient 在主队列管理用户选择、扫描、订阅、查询、超时与重连。ANTBMSController 独立管理设置和本机卡片，NativeReceiver 将不可变图像及布局串行交给 NinebotOutput、ZeehoOutput 及极核 6.2 寸输出，在视频编码前合成。
 
 ```sh
 bash Tools/test_bms.sh
@@ -24,3 +24,5 @@ bash Tools/test.sh
 BMS 用例覆盖校验有效帧、分片/粘包、噪声/错误 CRC、无效数值、过期数据、压差和卡片字段/布局。另执行 iPhone/iPad arm64 Release 构建验证，不启动 iOS 模拟器；工作流配置不随本 PR 提交。
 
 此前集成分支已有用户成功读取 ANT 实时数据并显示在手机 CarPlay 画面。本次从上游 main 独立提取后的 UI、蓝牙重连、后台行为，以及五寸/七寸仪表合成仍需要真机回归。
+
+2026-11-26：补齐上述九号、极核输出的 BMS 合成；新增路径仍需对应仪表真机验收。

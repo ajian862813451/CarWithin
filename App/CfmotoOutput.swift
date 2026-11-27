@@ -18,6 +18,8 @@ struct CfmotoProfile: Equatable {
     let bitrate: Int
     let label: String
 
+    var discoversEasyConn = false
+
     static let fiveInch = CfmotoProfile(width: 800, height: 386, fps: 25, bitrate: 2_500_000, label: "春风 5 寸")
     static let sixInch = CfmotoProfile(width: 1024, height: 515, fps: 30, bitrate: 4_500_000, label: "春风 6.2 寸")
 
@@ -136,21 +138,19 @@ final class CfmotoOutput {
                 let maxReconnectDuration: TimeInterval = 180
                 while active {
                     let conn = PxcConnection(localIP: localAddress, targetIP: targetAddress,
-                                             phone: phone, dashboard: profile.label, log: onLog)
+                                             phone: phone, dashboard: profile.label, discoversEasyConn: profile.discoversEasyConn, log: onLog)
                     guard installConnection(conn) else { break }
                     do {
                         try conn.start()
                         guard active else { break }
-                        retryAttempt = 0
-                        disconnectedSince = nil
                         let size = conn.mediaSize
                         queue.sync {
                             encodeWidth = size.width
                             encodeHeight = size.height
                             // 极核逻辑：用仪表报的 fps，码率按 2.5 Mbit/s @25 FPS 线性换算。
                             // 例：仪表报 25 → 2.5 Mbit/s，报 30 → 3.0 Mbit/s。
-                            effectiveFps = size.fps
-                            effectiveBitrate = CfmotoProfile.bitrate(for: size.fps)
+                            effectiveFps = profile == .fiveInch ? size.fps : profile.fps
+                            effectiveBitrate = profile == .fiveInch ? CfmotoProfile.bitrate(for: size.fps) : profile.bitrate
                             encoder?.invalidate()
                             encoder = nil
                             lastKeyframe = -.infinity
@@ -185,21 +185,27 @@ final class CfmotoOutput {
                                 }
                                 guard let recovered else { throw TailingError.timeout("等待 H.264 编码画面") }
                                 try conn.sendH264(recovered.data)
+                                retryAttempt = 0; disconnectedSince = nil
                                 first = false
                                 report("正在投屏 · \(encodeWidth)×\(encodeHeight) · H.264")
                                 continue
                             }
                             try conn.sendH264(result.data)
+                            retryAttempt = 0; disconnectedSince = nil
                             first = false
                             report("正在投屏 · \(encodeWidth)×\(encodeHeight) · H.264")
                         }
                     } catch {
                         if active {
+                            if profile.discoversEasyConn {
+                                onLog("\(profile.label)输出失败：\(error.localizedDescription)")
+                                break
+                            }
                             let now = ProcessInfo.processInfo.systemUptime
                             if disconnectedSince == nil { disconnectedSince = now }
                             if let since = disconnectedSince, now - since >= maxReconnectDuration {
                                 onLog("\(profile.label)连续 3 分钟无法连接仪表，已自动停止以节省后台资源")
-                                report("\(profile.label)已离开仪表 Wi-Fi，自动停止")
+                                report("\(profile.label)持续连接失败，已自动停止")
                                 clearConnection(conn)
                                 conn.close()
                                 onGiveUp?()

@@ -29,6 +29,13 @@ public struct BMSFieldCapabilities: Equatable {
         }
         if reading.maximumTemperature != nil { fields.insert(.temperature) }
         if reading.reportedCellDelta != nil || reading.cells.compactMap({ $0 }).count >= 2 { fields.insert(.cellDelta) }
+        // Capacity is only reported when the protocol supplies both values;
+        // otherwise the card shows --/--A instead of a misleading zero.
+        // 只有协议同时提供总容量和剩余容量时才认为该字段可用，
+        // 否则卡片显示 --/--A，不会把缺失值当成 0。
+        if reading.available.contains("capacity"), reading.available.contains("remaining") {
+            fields.insert(.capacity)
+        }
         return fields
     }
     public mutating func observe(_ reading: ANTBMSReading) {
@@ -69,7 +76,7 @@ public struct BMSFieldCapabilities: Equatable {
         }
     }
     public var recommendedFields: [Field] {
-        let order: [Field] = [.charge, .voltage, .current, .temperature, .cellDelta, .power]
+        let order: [Field] = [.charge, .voltage, .current, .capacity, .temperature, .cellDelta, .power]
         if !observed.isEmpty { return Array(order.filter { observed.contains($0) }.prefix(4)) }
         if family == .jikong { return [.voltage, .cellDelta] }
         return Array(order.filter { !unsupported.contains($0) }.prefix(4))

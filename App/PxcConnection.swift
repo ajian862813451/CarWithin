@@ -40,7 +40,10 @@ final class PxcConnection: @unchecked Sendable {
     }
 
     private let localIP: String
-    private let targetIP: String
+    private var targetIP: String
+    private var probePort: UInt16 = Port.probe
+    private var discoveryPackage: String?
+    private let discoversEasyConn: Bool
     private let phone: TailingPhoneInfo
     private let dashboard: String
     private let identityProvider: () throws -> TailingIdentity
@@ -56,12 +59,14 @@ final class PxcConnection: @unchecked Sendable {
     private var configured = false
     private var mediaStarted = false
     private var frameRequested = false
-    private var negotiated = MediaSize(width: 800, height: 386, fps: 25)
+    private var negotiated = MediaSize(width: 800, height: 384, fps: 30)
     private var framesSent = 0
 
     init(localIP: String, targetIP: String, phone: TailingPhoneInfo, dashboard: String,
          identityProvider: @escaping () throws -> TailingIdentity = TailingIdentity.load,
+         discoversEasyConn: Bool = false,
          log: @escaping (String) -> Void) {
+        self.discoversEasyConn = discoversEasyConn
         self.localIP = localIP
         self.targetIP = targetIP
         self.phone = phone
@@ -70,7 +75,7 @@ final class PxcConnection: @unchecked Sendable {
         self.log = log
     }
 
-    /// 仪表在媒体配置里要求的实际编码尺寸（已按偶数对齐）。
+    /// 仪表在媒体配置里要求的实际编码尺寸（已按 16 对齐）。
     var mediaSize: MediaSize {
         condition.lock(); defer { condition.unlock() }
         return negotiated
@@ -84,14 +89,6 @@ final class PxcConnection: @unchecked Sendable {
         return parts.joined(separator: ".")
     }
 
-    /// 极核 AE2 逻辑：只验尺寸范围，不再因编码值直接抛错。
-    /// 原逻辑要求 codec 只能是 0 或 2，2026-11-25 23:29 春风 CFDL16-6GUH
-    /// 在 10921 上报的媒体配置就是在这里被拦住的（“春风媒体尺寸、帧率或编码格式无效”），
-    /// 而且校验在打日志之前，日志里根本看不到仪表到底报了什么。
-    /// 现在：宽 240–1920、高 240–1080、帧率 0–60（仪表报 0 表示未指定帧率，按 25 FPS 兜底）；
-    /// codec 不在 0/2 时不再抛错，统一按 H.264 处理（本机只编 H.264）。
-    /// 尺寸对齐也改成只保证偶数（800×386 保持 800×386），
-    /// 不再按 16 对齐（原来 800×386 → 800×384，1024×515 → 1024×512）。
     struct CaptureConfiguration {
         let size: MediaSize
         let reportedFPS: UInt32?
@@ -120,6 +117,16 @@ final class PxcConnection: @unchecked Sendable {
     }
 
     func start() throws {
+        if discoversEasyConn {
+            if let endpoint = EasyConnDiscovery.find(expected: targetIP.isEmpty ? nil : targetIP) {
+                targetIP = endpoint.address; probePort = endpoint.port; discoveryPackage = endpoint.package
+                log("EasyConn mDNS：\(endpoint.address):\(endpoint.port)，\(endpoint.package)")
+            } else {
+                if targetIP.isEmpty { targetIP = Self.gateway(for: localIP) ?? "" }
+                log("EasyConn 未发现 mDNS，尝试用户地址/网关的 10930 完整握手；失败不会视为已找到仪表")
+            }
+            guard !targetIP.isEmpty, targetIP != localIP else { throw TailingError.protocolFailure("未找到仪表地址") }
+        }
         let loaded = try identityProvider()
         condition.lock(); identity = loaded; condition.unlock()
 
@@ -154,8 +161,8 @@ final class PxcConnection: @unchecked Sendable {
             do {
                 let socket = try TailingSocket.create()
                 defer { socket.close() }
-                try socket.connect(localIP: localIP, remoteIP: targetIP, port: Port.probe, timeout: 3)
-                let body = try TailingProtocol.json(["phoneType": "Android", "packageName": phone.package])
+                try socket.connect(localIP: localIP, remoteIP: targetIP, port: probePort, timeout: 3)
+                let body = try TailingProtocol.json(["phoneType": "Android", "packageName": discoveryPackage ?? phone.package])
                 try socket.write(TailingProtocol.control(Command.probe, payload: body))
                 let reply = try TailingProtocol.readControl { try socket.readExactly($0, timeout: 4) }
                 let text = String(data: reply.payload, encoding: .utf8) ?? ""
@@ -310,29 +317,29 @@ final class PxcConnection: @unchecked Sendable {
         switch request.command {
         case Command.configCapture:
             let body = request.payload
-            let parsed = try Self.captureConfiguration(body)
-            let size = parsed.size
-            let width = size.width, height = size.height
-            let rawFps = parsed.reportedFPS ?? 0
-            let fps = size.fps, encoder = Int(parsed.encoder)
-            let ext = parsed.extensionFlag
+            log("\(dashboard) 媒体配置 command=16，长度=\(body.count)，原始字节=\(body.prefix(64).map { String(format: "%02x", $0) }.joined())")
+            let capture = try Self.captureConfiguration(body)
+            let size = capture.size
+            let width = Int(body.uint16LE(0)), height = Int(body.uint16LE(2))
+            let fps = size.fps, encoder = capture.encoder
+            let ext = capture.extensionFlag
             let alignedWidth = size.width, alignedHeight = size.height
             condition.lock()
-            let changed = configured && negotiated != size
+            let changed = configured && (negotiated.width != size.width || negotiated.height != size.height)
             condition.unlock()
-            guard !changed else { throw TailingError.protocolFailure("春风会话内媒体尺寸发生变化，请重新连接") }
+            guard !changed else { throw TailingError.protocolFailure("仪表会话内媒体尺寸发生变化，请重新连接") }
             var payload = Data()
-            payload.appendLE(UInt32(encoder == 0 ? 2 : encoder))
+            payload.appendLE(encoder)
             payload.appendLE(UInt16(alignedWidth))
             payload.appendLE(UInt16(alignedHeight))
             payload.append(ext)
             try socket.write(TailingProtocol.auxiliary(Command.configCapture + 1, token: request.token, payload: payload))
             condition.lock()
-            negotiated = MediaSize(width: alignedWidth, height: alignedHeight, fps: fps > 0 ? fps : 25)
+            negotiated = MediaSize(width: alignedWidth, height: alignedHeight, fps: fps > 0 ? fps : 30)
             configured = true
             condition.broadcast()
             condition.unlock()
-            log("\(dashboard) 仪表要求 \(width)×\(height)@\(rawFps)（实际按 \(fps) FPS）编码器=\(encoder) → 回 17（\(alignedWidth)×\(alignedHeight)）")
+            log("\(dashboard) 仪表要求 \(width)×\(height)，原始帧率=\(capture.reportedFPS.map(String.init) ?? "缺省")，帧率参考=\(fps)，回应编码字段=\(encoder) → 回 17（\(alignedWidth)×\(alignedHeight)）")
         case Command.getVersion:
             var payload = Data()
             payload.appendLE(UInt32(3))
@@ -346,7 +353,7 @@ final class PxcConnection: @unchecked Sendable {
             log("\(dashboard) 扩展采集配置 \(request.payload.count) 字节 → 回 97")
         case Command.dataStart:
             condition.lock()
-            guard configured else { condition.unlock(); throw TailingError.protocolFailure("春风在媒体配置前请求开流") }
+            guard configured else { condition.unlock(); throw TailingError.protocolFailure("仪表在媒体配置前请求开流") }
             mediaStarted = true; condition.broadcast(); condition.unlock()
             try socket.write(TailingProtocol.auxiliary(Command.dataStart + 1, token: request.token, payload: Data()))
             log("\(dashboard) 仪表要求开流，已回 113（等待仪表逐帧拉画面）")

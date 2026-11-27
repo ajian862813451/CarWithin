@@ -1,0 +1,42 @@
+{
+  "output": [
+    {
+      "original": "H264Encoder(width: ZeehoOutput.width, height: ZeehoOutput.height,",
+      "adapted": "H264Encoder(width: connection.outputDimensions.width, height: connection.outputDimensions.height,"
+    },
+    {
+      "original": "let width = ZeehoOutput.width, height = ZeehoOutput.height",
+      "adapted": "let width = connection.outputDimensions.width, height = connection.outputDimensions.height"
+    },
+    {
+      "original": "report(\"正在投屏 · 1024×480 · H.264\")",
+      "adapted": "report(\"正在投屏 · \\(connection.outputDimensions.width)×\\(connection.outputDimensions.height) · H.264\")"
+    }
+  ],
+  "connection": [
+    {
+      "original": "    private var configured = false",
+      "adapted": "    private var configured = false\n    private var negotiatedDimensions = Zeeho62MediaSize.standard\n    var outputDimensions: Zeeho62MediaSize {\n        condition.lock(); defer { condition.unlock() }\n        return negotiatedDimensions\n    }"
+    },
+    {
+      "original": "                let validDimensions = isZeeho ? width == 1024 && (height == 480 || height == 488)\n                    : width == 480 && height == 272\n                guard validDimensions else {\n                    throw TailingError.protocolFailure(\"仪表媒体尺寸 \\(width)×\\(height) 与 \\(dashboard) 配置不符\")\n                }\n",
+      "adapted": "                let dimensions = try Zeeho62MediaSize.negotiate(width: Int(width), height: Int(height))\n                condition.lock()\n                let changed = configured && negotiatedDimensions != dimensions\n                condition.unlock()\n                guard !changed else { throw TailingError.protocolFailure(\"极核 6.2 寸会话内尺寸改变，请重新连接\") }\n"
+    },
+    {
+      "original": "payload.appendLE(UInt16(profile.width))",
+      "adapted": "payload.appendLE(UInt16(dimensions.width))"
+    },
+    {
+      "original": "payload.appendLE(UInt16(profile.height))",
+      "adapted": "payload.appendLE(UInt16(dimensions.height))"
+    },
+    {
+      "original": "condition.lock(); configured = true; condition.unlock()",
+      "adapted": "condition.lock(); negotiatedDimensions = dimensions; configured = true; condition.unlock()"
+    },
+    {
+      "original": "回应 \\(isZeeho ? \"H.264\" : \"JPEG\") / \\(profile.width)×\\(profile.height)",
+      "adapted": "回应 \\(isZeeho ? \"H.264\" : \"JPEG\") / \\(dimensions.width)×\\(dimensions.height)"
+    }
+  ]
+}

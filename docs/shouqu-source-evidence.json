@@ -1,0 +1,11 @@
+{
+  "received": "2026-11-27",
+  "package": "首驱投屏-源码与协议包",
+  "files": {
+    "README.md": "3f6c643c8e7a903d6e12ba174a151aeef057efd7164eae564c383e37c59b20a7",
+    "01-协议规范/首驱仪表投屏协议规范.md": "fb0ca978818d986d7b3108274dd8ce748805c0ec0ae635c37b239554171df4dc",
+    "03-iOS移植/ShouQuCastCore.swift": "cb482eae65ea681634872d49a1d6ec6de2abf4484c1760f23757ef838979568f",
+    "02-PC参考实现/shouqu_cast.py": "93965fb0a4c59ae729ef5f1d20da4fea6e09adace1ca91091cb0119fad10b33d"
+  },
+  "note": "Input evidence only; no original app assets or captured per-vehicle identity copied into application."
+}

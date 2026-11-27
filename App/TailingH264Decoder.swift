@@ -226,8 +226,8 @@ enum TailingH264DecoderError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidConfiguration: CWL("台铃输出 H.264 配置不是有效的 avcC 数据")
-        case .missingParameterSets: CWL("台铃输出 H.264 配置缺少 SPS/PPS")
+        case .invalidConfiguration: CWL("仪表输出 H.264 配置不是有效的 avcC 数据")
+        case .missingParameterSets: CWL("仪表输出 H.264 配置缺少 SPS/PPS")
         case .format(let code): CWL("创建 H.264 解码格式失败（{1}）", [String(describing: code)])
         case .create(let code): CWL("创建 VideoToolbox 解码器失败（{1}）", [String(describing: code)])
         case .blockBuffer(let code): CWL("创建视频压缩数据块失败（{1}）", [String(describing: code)])

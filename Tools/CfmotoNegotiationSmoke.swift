@@ -26,3 +26,17 @@ func cfmotoNegotiationSmoke() throws {
     }
     print("PASS: 春风媒体配置长度、尺寸、默认帧率、短配置、编码字段兼容与尺寸安全边界")
 }
+
+func zeehoAE6SizeSmoke() throws {
+    for height in [480, 488] {
+        let size = try Zeeho62MediaSize.negotiate(width: 1024, height: height)
+        precondition(size == .standard)
+    }
+    let ae6 = try Zeeho62MediaSize.negotiate(width: 1024, height: 484)
+    precondition(ae6.width == 1024 && ae6.height == 484)
+    for (width, height) in [(1024, 515), (1024, 483), (800, 484), (0, 484)] {
+        do { _ = try Zeeho62MediaSize.negotiate(width: width, height: height); fatalError("Unsupported legacy size accepted") }
+        catch TailingError.protocolFailure { }
+    }
+    print("PASS: AE6 native 1024×484; old 480/488 mapping; spring/odd sizes isolated")
+}

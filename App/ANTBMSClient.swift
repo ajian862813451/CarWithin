@@ -84,7 +84,25 @@ final class ANTBMSClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelega
         return sample.reading
     }
     init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults; super.init()
+        self.defaults = defaults
+        // Move the former isolated YY entry into the unified client once; preserve ANT choices.
+        if !defaults.bool(forKey: "bmsUnifiedYYMigration") {
+            if let raw = defaults.string(forKey: "experimentalYYBMSPeripheral"), let id = UUID(uuidString: raw) {
+                let familyKey = "bmsFamily." + id.uuidString
+                let activeANT = defaults.bool(forKey: "antBMSEnabled") && defaults.string(forKey: "antBMSPeripheral") == raw
+                if defaults.string(forKey: familyKey) == nil, !activeANT {
+                    defaults.set(BMSFamily.yanyang.rawValue, forKey: familyKey)
+                }
+                if defaults.bool(forKey: "experimentalYYBMSEnabled"), !defaults.bool(forKey: "antBMSEnabled") {
+                    defaults.set(raw, forKey: "antBMSPeripheral")
+                    defaults.set(defaults.string(forKey: "experimentalYYBMSName") ?? "彦阳保护板", forKey: "antBMSName")
+                    defaults.set(true, forKey: "antBMSEnabled")
+                }
+            }
+            defaults.set(false, forKey: "experimentalYYBMSEnabled")
+            defaults.set(true, forKey: "bmsUnifiedYYMigration")
+        }
+        super.init()
         clearUnsupportedSelection()
     }
     @discardableResult

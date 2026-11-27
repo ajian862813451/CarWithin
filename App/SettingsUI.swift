@@ -3,6 +3,12 @@ import UIKit
 /// A pull-down choice with the subset of the UISegmentedControl API the app uses, so a setting can
 /// switch from segments to a menu without touching the code that reads it.
 final class ChoiceMenu: UIControl {
+    struct Group {
+        let title: String
+        let indices: [Int]
+    }
+    /// Groups reference the original flat indices, preserving callers and saved selections.
+    var groups: [Group] = [] { didSet { refresh() } }
     private var items: [String]
     private var disabledItems = Set<Int>()
     private let button = UIButton(type: .system)
@@ -54,14 +60,25 @@ final class ChoiceMenu: UIControl {
 
     private func refresh() {
         button.configuration?.title = selectedTitle
-        button.menu = UIMenu(children: items.enumerated().map { index, title in
-            UIAction(title: title, attributes: disabledItems.contains(index) ? .disabled : [],
+        func action(_ index: Int) -> UIAction {
+            UIAction(title: items[index], attributes: disabledItems.contains(index) ? .disabled : [],
                      state: index == selectedSegmentIndex ? .on : .off) { [weak self] _ in
                 guard let self, self.selectedSegmentIndex != index else { return }
                 self.selectedSegmentIndex = index
                 self.sendActions(for: .valueChanged)
             }
-        })
+        }
+        let grouped = Set(groups.flatMap(\.indices))
+        var children: [UIMenuElement] = items.indices.filter { !grouped.contains($0) }.map(action)
+        for group in groups {
+            let indices = group.indices.filter { items.indices.contains($0) }
+            guard !indices.isEmpty else { continue }
+            let menu = UIMenu(title: group.title,
+                              image: indices.contains(selectedSegmentIndex) ? UIImage(systemName: "checkmark") : nil,
+                              children: indices.map(action))
+            children.append(menu)
+        }
+        button.menu = UIMenu(children: children)
         invalidateIntrinsicContentSize()
         // As a table accessory view the frame is not managed by Auto Layout.
         if let superview { frame.size = intrinsicContentSize; superview.setNeedsLayout() }

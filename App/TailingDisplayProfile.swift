@@ -36,7 +36,7 @@ enum ZeehoCanvas: Int, CaseIterable, Sendable {
 enum ZeehoBitrate: Int, CaseIterable, Sendable {
     case auto = 0, m12 = 12, m15 = 15, m18 = 18, m24 = 24, m30 = 30
 
-    var title: String { self == .auto ? "自动（随帧率）" : "\(rawValue) Mbit/s" }
+    var title: String { self == .auto ? CWL("自动（随帧率）") : "\(rawValue) Mbit/s" }
     var bitsPerSecond: Int? { self == .auto ? nil : rawValue * 1_000_000 }
 }
 
@@ -44,7 +44,7 @@ enum ZeehoBitrate: Int, CaseIterable, Sendable {
 enum ZeehoEncodeProfile: Int, CaseIterable, Sendable {
     case baseline = 0, main = 1
 
-    var title: String { self == .baseline ? "Baseline（兼容）" : "Main（更清晰）" }
+    var title: String { self == .baseline ? CWL("Baseline（兼容）") : CWL("Main（更清晰）") }
 }
 
 /// A bounded compressed-frame FIFO. On overflow, discard the dependent GOP and wait for IDR.
@@ -145,13 +145,8 @@ enum TailingDisplayProfile: Equatable, Sendable {
         case .tailing43:
             return reported == preferredSize ? preferredSize : nil
         case .zeeho62:
-            // AE6 fixes: accept the 1024x484 size reported by the 2026 AE6
-            // dashboard. 480/488 remain supported for older instruments.
-            // The legacy 6.2-inch path in Zeeho62Legacy.swift has the same change.
-            // 极核 AE6 实测上报 1024x484；保留 480/488 兼容已有仪表。
-            // Zeeho62Legacy.swift 中的 6.2 寸老路径需保持同步。
             guard reported.width == 1024, [480, 484, 488].contains(reported.height) else { return nil }
-            return InstrumentFrameSize(width: reported.width, height: reported.height)
+            return reported.height == 484 ? reported : preferredSize
         case .zeehoAE2:
             guard (240...1920).contains(reported.width), (240...1080).contains(reported.height) else { return nil }
             return InstrumentFrameSize(width: reported.width & ~1, height: reported.height & ~1)

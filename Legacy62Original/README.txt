@@ -4,3 +4,5 @@ ZeehoOutput 原输出代码不修改，协商代码仅增加用户授权的自�
 SPS/编码尺寸固定为原 1024×480，输出 25 FPS、2.5 Mbit/s，原有控制命令处理及媒体协商回应保留。
 原始 Socket 和 RSA 身份实现与当前共用文件逐字节一致，Data 字节读写扩展也保持原样。
 manifest.json 记录原文件 Git blob/SHA-256 及嵌入代码块哈希。Tools/verify_legacy62.py 可检查恢复结果。
+
+2026-11-26：按本轮授权为 6.2 寸输出增加 BMS 卡片合成，不改动握手、媒体尺寸和控制消息。bms-overlay-adapter.json 记录输出层适配；校验脚本先逆转 BMS 适配，再逆转 AE6 尺寸适配，继续核对原始快照。

@@ -1,0 +1,24 @@
+CarNine
+Copyright 2026 xiaolu5hao
+
+This product includes software developed as part of the CarNine project
+(https://github.com/xiaolu5hao/CarNine-Ninebot).
+
+Third-party acknowledgements
+----------------------------
+* segway-ninebot-ble-cli (https://codeberg.org/NootNooot/segway-ninebot-ble-cli)
+  Apache License 2.0. The Encryption2 key derivation, CTR + CBC-MAC frame
+  format and PRE_COMM/AUTH flow implemented in ble/NbCrypto.java and
+  ble/NbFrames.java were written against that project's protocol description
+  and test vectors.
+
+* CarLocal / CarWithin / OcarPlay
+  Protocol research references only; no source code or binaries from these
+  projects are redistributed in this repository.
+
+* Android Open Source Project, AndroidX, Material Components
+  Apache License 2.0.
+
+This project is unofficial and is not affiliated with, endorsed by, or
+sponsored by Ninebot / Segway, OPPO, or Baidu. Product names are used only
+to describe interoperability.

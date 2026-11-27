@@ -6,13 +6,24 @@
 
 CarWithin 在同一台 iPhone 上启动、显示和触控本机 CarPlay。你可以直接在 iPhone 上用导航、音乐等 CarPlay 应用，也可以把画面送到同一局域网的车机浏览器、平板、电脑或另一台手机。浏览器接收支持触控回传。
 
+**Android 1.0.0** · [下载 APK](https://github.com/xmz28/CarWithin/releases/tag/android-v1.0.0) · [安装、兼容仪表与源码构建](android/README.md)
+
 ![CarWithin 连接示意图：iPhone 本机显示，也可输出到浏览器、无线 CarLife、兼容仪表或实验性 AirPlay。](docs/images/carwithin-connections-zh.png)
 
 ## 下载与安装
 
-- [从 GitHub Releases 下载](https://github.com/xmz28/CarWithin/releases/latest)。当前版本为 **1.0.5（构建 17）**。
-- 下载 `CarWithin-1.0.5-unsigned.ipa`，用支持 IPA 的侧载工具按自己的签名方式签名并安装。按设备提示完成开发者信任或开启开发者模式。
+- [从 GitHub Releases 下载](https://github.com/xmz28/CarWithin/releases/latest)。当前版本为 **1.0.6（构建 18）**。
+- 下载 `CarWithin-1.0.6-unsigned.ipa`，用支持 IPA 的侧载工具按自己的签名方式签名并安装。按设备提示完成开发者信任或开启开发者模式。
 - 最低安装目标为 iOS/iPadOS 16.0，arm64；iOS 15 不支持安装。安装目标降低不等于所有旧系统均已实测，iOS 16.x 的本机 CarPlay、声音和后台行为仍需对应设备验证。实际可用性取决于设备、系统版本和签名方式。CarWithin 使用 iOS 私有接口，系统升级后可能需要重新验证。
+
+## 1.0.6 更新
+
+- 新增支持首驱 480×208 仪表投屏。
+- 新增极核 AE4i Pro+ 仪表入口，改进春风尺寸协商、连接重试和编码恢复。
+- 扩展可选 BMS 卡片与多品牌电池接入；新增品牌、板型仍需对应硬件验证。
+- 新增其他摩托车仪表方案，改善连接诊断。
+
+首驱成功反馈仅覆盖本次测试仪表；其他型号、固件、锁屏和长期运行仍需分别验证。
 
 ## 1.0.5 更新
 
@@ -144,7 +155,7 @@ iPhone 加入仪表 Wi-Fi，在「当前输出」选择对应春风尺寸，开�
 
 「关于 → 赞赏与支持」可查看赞赏和开发测试贡献名单，「请我喝杯咖啡」提供支付宝、微信入口。赞赏完全自愿，不影响使用、更新或适配安排。
 
-本轮代码贡献鸣谢：[yiquchangge1](https://github.com/yiquchangge1)（SE+）、[武汉 / yuliang-shuji](https://github.com/yuliang-shuji)（AE2 Pro）、[Boos4721](https://github.com/Boos4721)（ANT BMS）、[扫毒单位 / SDDW007](https://github.com/SDDW007)（春风）。GitHub 作者信息和原始提交均保留。
+本轮代码贡献鸣谢：[yiquchangge1](https://github.com/yiquchangge1)（SE+）、[武汉 / yuliang-shuji](https://github.com/yuliang-shuji)（AE2 Pro）、[Boos4721](https://github.com/Boos4721)（ANT 与多品牌 BMS）、[扫毒单位 / SDDW007](https://github.com/SDDW007)（春风）、[ranchen-love](https://github.com/ranchen-love)（春风 5 寸）、[飞扬大大 / F31C-73BD](https://github.com/F31C-73BD)（极核 AE4i Pro+）。GitHub 作者信息和原始提交均保留。
 
 ## 检查更新与安装新版
 

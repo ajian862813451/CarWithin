@@ -61,6 +61,9 @@ final class NativeReceiver {
     var onZeehoState: ((String) -> Void)?
     private let ninebot = NinebotOutput()
     var onNinebotState: ((String) -> Void)?
+    var onMotorcycleState: ((String) -> Void)?
+    private let motorcycle = MotorcycleOutput(name: "motorcycle")
+    private let motorcyclePXC = CfmotoOutput(name: "motorcycle-pxc")
     private let cfmoto5 = CfmotoOutput(name: "cfmoto5")
     private let cfmoto62 = CfmotoOutput(name: "cfmoto62")
     var onCfmotoState: ((String) -> Void)?
@@ -152,7 +155,30 @@ final class NativeReceiver {
                 output.start(localAddress: configuration.address, targetAddress: target, phone: phone, profile: profile,
                              onState: { [weak self] in self?.onCfmotoState?($0) },
                              onLog: { [weak self] in self?.log($0) },
-                             requestKeyframe: { [weak self] in self?.requestKeyFrame(reason: "春风解码恢复") }, onGiveUp: { [weak self] in self?.queue.async { [weak self] in self?.fail("春风仪表持续连接失败超过3分钟，已停止CarPlay") } })
+                             requestKeyframe: { [weak self] in self?.requestKeyFrame(reason: "春风解码恢复") },
+                             onGiveUp: { [weak self] in
+                                 self?.queue.async { [weak self] in self?.fail("春风仪表持续连接失败超过 3 分钟，已停止 CarPlay") }
+                             })
+            }
+            if let profile = configuration.motorcycleProfile {
+                let address = configuration.motorcycleAddress ?? ""
+                let state: (String) -> Void = { [weak self] in self?.onMotorcycleState?($0) }
+                let log: (String) -> Void = { [weak self] in self?.log($0) }
+                let keyframe: () -> Void = { [weak self] in self?.requestKeyFrame(reason: "摩托车仪表解码恢复") }
+                if profile.transport == .easyConn {
+                    let phone = configuration.tailingPhoneInfo ?? TailingPhoneInfo(package: Bundle.main.bundleIdentifier ?? "CarWithin",
+                        versionCode: Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0,
+                        model: "iPhone", systemVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+                        width: configuration.width, height: configuration.height, rotation: 1)
+                    self.motorcyclePXC.start(localAddress: configuration.address, targetAddress: address, phone: phone,
+                        profile: profile.pxcProfile, onState: state, onLog: log, requestKeyframe: keyframe)
+                } else {
+                    let target = address.isEmpty ? (PxcConnection.gateway(for: configuration.address) ?? profile.defaultAddress) : address
+                    self.motorcycle.start(localAddress: configuration.address, targetAddress: target,
+                        device: configuration.motorcycleBluetoothID, profile: profile,
+                        eryaVideoPort: configuration.eryaVideoPort, eryaControlPort: configuration.eryaControlPort,
+                        onState: state, onLog: log, requestKeyframe: keyframe)
+                }
             }
             if let target = configuration.ninebotAddress {
                 self.ninebot.start(localAddress: configuration.address, targetAddress: target, mode: configuration.ninebotMode,
@@ -375,6 +401,8 @@ final class NativeReceiver {
         zeeho.stop()
         zeeho62.stop()
         ninebot.stop()
+        motorcycle.stop()
+        motorcyclePXC.stop()
         cfmoto5.stop()
         cfmoto62.stop()
         tailing.stop()
@@ -476,6 +504,10 @@ final class NativeReceiver {
                         else { self.zeeho.append(data, codec: codec, keyframe: keyframe) }
                     }
                     if configuration.ninebotAddress != nil { self.ninebot.append(data, codec: codec, keyframe: keyframe) }
+                    if let profile = configuration.motorcycleProfile {
+                        if profile.transport == .easyConn { self.motorcyclePXC.append(data, codec: codec, keyframe: keyframe) }
+                        else { self.motorcycle.append(data, codec: codec, keyframe: keyframe) }
+                    }
                     if let cfmoto = configuration.cfmotoProfile {
                         let output = cfmoto == .sixInch ? self.cfmoto62 : self.cfmoto5
                         output.append(data, codec: codec, keyframe: keyframe)

@@ -33,12 +33,21 @@ private final class Box<Value>: @unchecked Sendable {
 @main
 struct TailingTests {
     static func main() throws {
+        for message in [TailingError.timeout("TCP8200").localizedDescription,
+                        TailingError.protocolFailure("Yunmo").localizedDescription,
+                        TailingError.closed.localizedDescription,
+                        TailingError.system("TCP", 1).localizedDescription] {
+            try expect(!message.contains("台铃") && !message.contains("PXC"), "shared errors must not claim a vendor or protocol")
+        }
+
         #if TAILING_MEDIA_SMOKE
         try tailingJPEGSizeSmoke()
         try tailingMediaSmoke()
         #endif
         try dimensions()
+        try pxcAutoStartProbeSmoke()
         try cfmotoNegotiationSmoke()
+        try zeehoAE6SizeSmoke()
         try frames()
         try identity()
         try socketCancellation()

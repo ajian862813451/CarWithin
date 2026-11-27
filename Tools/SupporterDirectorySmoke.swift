@@ -7,7 +7,7 @@ import Foundation
         let directory = try SupporterDirectory.decode(data)
         precondition(directory.appContributors.map(\.name).prefix(4) == ["yiquchangge1", "武汉", "Boos4721", "扫毒单位"])
         precondition(directory.appContributors.first { $0.name == "武汉" }?.github == "yuliang-shuji")
-        precondition(directory.supporters.count == 41)
+        precondition(directory.supporters.count == 83)
         precondition(directory.supporters.first { $0.name == "正美旅行🤿海岛潜水 Ryan" }?.color == .green)
         precondition(directory.supporters.filter { $0.name == "**栋" }.count == 2)
         precondition(Set(directory.supporters.map(\.color)) == Set(SupporterDirectory.Supporter.Color.allCasesForTest))

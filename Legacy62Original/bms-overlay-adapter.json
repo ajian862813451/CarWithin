@@ -1,0 +1,24 @@
+{
+  "output": [
+    {
+      "original": "    private var session: Session?\n\n",
+      "adapted": "    private var session: Session?\n    private var bmsImage: CGImage?\n    private var bmsConfiguration = ANTBMSCardConfiguration()\n\n    func setBMSOverlay(_ image: CGImage?, configuration: ANTBMSCardConfiguration) {\n        bmsImage = image; bmsConfiguration = configuration\n        let current = session\n        queue.async { current?.setBMSOverlay(image, configuration: configuration) }\n    }\n\n"
+    },
+    {
+      "original": "        session = next\n        next.start()\n",
+      "adapted": "        session = next\n        queue.sync { next.setBMSOverlay(bmsImage, configuration: bmsConfiguration) }\n        next.start()\n"
+    },
+    {
+      "original": "        private var latest: CVPixelBuffer?\n        private lazy var compositor = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])\n",
+      "adapted": "        private var latest: CVPixelBuffer?\n        private var bmsOverlay: CIImage?\n        private var bmsConfiguration = ANTBMSCardConfiguration()\n\n        func setBMSOverlay(_ image: CGImage?, configuration: ANTBMSCardConfiguration) {\n            bmsOverlay = image.map { CIImage(cgImage: $0) }\n            bmsConfiguration = configuration\n        }\n\n        private lazy var compositor = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])\n"
+    },
+    {
+      "original": "            let width = connection.outputDimensions.width, height = connection.outputDimensions.height\n            if CVPixelBufferGetWidth(image) == width, CVPixelBufferGetHeight(image) == height { return image }\n            var buffer: CVPixelBuffer?\n",
+      "adapted": "            let width = connection.outputDimensions.width, height = connection.outputDimensions.height\n            if bmsOverlay == nil, CVPixelBufferGetWidth(image) == width, CVPixelBufferGetHeight(image) == height { return image }\n            var buffer: CVPixelBuffer?\n"
+    },
+    {
+      "original": "            let bounds = CGRect(x: 0, y: 0, width: width, height: height)\n            compositor.render(positioned.composited(over: CIImage(color: .black)).cropped(to: bounds),\n                              to: buffer, bounds: bounds, colorSpace: CGColorSpaceCreateDeviceRGB())\n",
+      "adapted": "            let bounds = CGRect(x: 0, y: 0, width: width, height: height)\n            compositor.render(BMSVideoCompositor.composite(bmsOverlay, configuration: bmsConfiguration,\n                          over: positioned.composited(over: CIImage(color: .black)).cropped(to: bounds), in: bounds),\n                              to: buffer, bounds: bounds, colorSpace: CGColorSpaceCreateDeviceRGB())\n"
+    }
+  ]
+}

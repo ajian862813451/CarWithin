@@ -1,0 +1,32 @@
+{
+  "errors": [
+    {
+      "original": "return \"台铃协议：\\(text)\"",
+      "adapted": "return CWL(\"仪表协议错误：{1}\", [text])"
+    },
+    {
+      "original": "return \"台铃等待超时：\\(text)\"",
+      "adapted": "return CWL(\"仪表连接超时：{1}\", [text])"
+    },
+    {
+      "original": "return \"台铃会话已关闭\"",
+      "adapted": "return CWL(\"仪表会话已关闭\")"
+    },
+    {
+      "original": "return \"台铃\\(text)失败（\\(code)）\"",
+      "adapted": "return CWL(\"仪表{1}失败（{2}）\", [text, String(code)])"
+    }
+  ],
+  "shared": {
+    "TailingH264Decoder.swift": [
+      {
+        "original": "CWL(\"台铃输出 H.264 配置不是有效的 avcC 数据\")",
+        "adapted": "CWL(\"仪表输出 H.264 配置不是有效的 avcC 数据\")"
+      },
+      {
+        "original": "CWL(\"台铃输出 H.264 配置缺少 SPS/PPS\")",
+        "adapted": "CWL(\"仪表输出 H.264 配置缺少 SPS/PPS\")"
+      }
+    ]
+  }
+}

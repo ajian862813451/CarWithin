@@ -66,7 +66,7 @@ struct ZeehoSEPlusSizeSmoke {
         precondition(ae4i.preferredSize == InstrumentFrameSize(width: 2048, height: 968))
         precondition(ae4i.bitrateScale == 6 && sePlus.bitrateScale == 1)
         precondition(ae4i.prioritizesEncodingQuality && !sePlus.prioritizesEncodingQuality)
-        for (w, h) in [(2048, 968), (2048, 960), (1024, 480), (1024, 484), (1920, 1080)] {
+        for (w, h) in [(2048, 968), (2046, 968), (2048, 960), (1024, 480), (1024, 484), (1920, 1080)] {
             let reported = InstrumentFrameSize(width: w, height: h)
             precondition(ae4i.outputSize(for: reported) == reported)
         }

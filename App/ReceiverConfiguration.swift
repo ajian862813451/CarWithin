@@ -38,6 +38,11 @@ struct ReceiverConfiguration {
     /// 留空表示自动取本机所在网段的网关（仪表热点一般是 .1）。
     var cfmotoAddress: String?
     var cfmotoProfile: CfmotoProfile?
+    var motorcycleProfile: MotorcycleProfile?
+    var motorcycleAddress: String?
+    var eryaVideoPort: UInt16 = 11111
+    var eryaControlPort: UInt16 = 11113
+    var motorcycleBluetoothID: UUID?
     var ninebotAddress: String?
     var ninebotMode: NinebotOutput.Mode = .fiveInch
     var tailingAddress: String?
@@ -171,6 +176,19 @@ struct ReceiverConfiguration {
                   !cfmotoAddress.hasSuffix(".0"), !cfmotoAddress.hasSuffix(".255") else {
                 throw ConfigurationError("请输入春风仪表真实的 IPv4 地址（不能用网段地址 .0 或广播地址 .255），留空则自动取网关 .1。")
             }
+        }
+        if let profile = motorcycleProfile {
+            if profile.transport == .erya && (eryaVideoPort == 0 || eryaControlPort == 0 || eryaVideoPort == eryaControlPort) {
+                throw ConfigurationError(CWL("请输入 1–65535 范围内的不同画面和控制端口。"))
+            }
+            if let ip = motorcycleAddress, !ip.isEmpty {
+                var target = in_addr()
+                guard inet_pton(AF_INET, ip, &target) == 1, ip != address,
+                      !ip.hasPrefix("127."), !ip.hasPrefix("0."), !ip.hasPrefix("169.254."),
+                      UInt32(bigEndian: target.s_addr) < 0xe0000000,
+                      !ip.hasSuffix(".0"), !ip.hasSuffix(".255") else { throw ConfigurationError(CWL("请输入有效的仪表 IPv4 地址。")) }
+            }
+            if profile.transport == .thinkerRide && motorcycleBluetoothID == nil { throw ConfigurationError(CWL("请先扫描并选择仪表蓝牙。")) }
         }
         if let ninebotAddress {
             var target = in_addr()

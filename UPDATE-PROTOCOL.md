@@ -60,3 +60,24 @@ xcrun swiftc -parse-as-library App/AppReleaseService.swift Tools/UpdateSmoke.swi
 xcrun swiftc -parse-as-library Sources/TDSCarKitCore/Localization.swift App/AppReleaseService.swift Tools/UpdateSmoke.swift -o /tmp/carwithin-update-smoke
 /tmp/carwithin-update-smoke
 ```
+
+## 未签名 IPA 与全能签覆盖更新（2026-11-27）
+
+### 打包身份
+
+| 用途 | Bundle ID |
+| --- | --- |
+| 作者本机开发、手机测试与续签 | `com.xmz28.SameDeviceCarPlayPoC` |
+| 公开 Release 未签名 IPA | `com.hanlinzhou.SameDeviceCarPlayPoC` |
+
+本地工程即使选择 Release，也不代表已使用公开 ID。公开打包应在独立构建目录明确指定 `PRODUCT_BUNDLE_IDENTIFIER=com.hanlinzhou.SameDeviceCarPlayPoC`，关闭签名；最终检查 IPA 内 Payload/*.app/Info.plist 的 CFBundleIdentifier，而不是只看工程或附件名称。版本和构建号仍从 App/Info.plist 读取。确认最终包不含开发签名和 embedded.mobileprovision，再从该 IPA 生成 ios-update.json、大小和 SHA-256。测试安装包不能直接作为公开附件上传。
+
+### 可用于 Release 的用户说明
+
+使用全能签更新时，下载新版未签名 IPA，沿用上一次安装时的 Bundle ID 和兼容的签名配置，重新签名后直接覆盖安装，通常无需删除旧版，可保留设置和应用数据。若以前修改过 Bundle ID，本次仍填写相同的自定义 ID；不要为了更新临时换一个。签名工具的具体按钮名称以实际版本为准。
+
+保持 Bundle ID 是覆盖更新的必要条件之一，并非唯一条件。签名所属 Team、App ID 前缀及描述文件授权不兼容时，系统仍可能拒绝覆盖；证书更换也不必然意味着需要卸载。失败时先核对签名配置，保留旧 App；改用另一 Bundle ID 通常会安装为另一个 App，数据不自动迁移。尚未对用户的具体全能签版本和证书组合进行实机覆盖验收。
+
+应用内“发现更新/下载安装包”与“系统覆盖安装”是两步：本项目按固定产品和构建号发现更新，最终安装由全能签及 iOS 签名校验完成。
+
+依据：[Apple 签名授权排障](https://developer.apple.com/documentation/bundleresources/diagnosing-issues-with-entitlements)、[Apple Bundle ID 说明](https://developer.apple.com/documentation/BundleResources/Information-Property-List/CFBundleIdentifier)。

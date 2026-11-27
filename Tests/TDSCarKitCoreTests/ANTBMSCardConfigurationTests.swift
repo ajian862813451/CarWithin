@@ -10,15 +10,30 @@ final class ANTBMSCardConfigurationTests: XCTestCase {
             protectionBits: protection, warningBits: 0)
     }
 
-    func testExistingUsersKeepAllSixMetricsInTwoLines() {
+    func testExistingUsersKeepAllMetricsInTwoLines() {
         let card = ANTBMSCardConfiguration()
         XCTAssertEqual(card.size, .medium)
-        XCTAssertEqual(card.lines(for: reading()), ["蚂蚁  78%  82.78V  14°C", "-12.3A  -1018W  压差 6mV"])
+        XCTAssertEqual(card.lines(for: reading()),
+                       ["蚂蚁  78%  82.78V  14°C  -12.3A", "-1018W  压差 6mV  131.92/170.0A"])
     }
 
-    func testCompactCardKeepsVoltageAndSpreadOnOneLine() {
+    func testCompactCardIncludesRemainingOverTotalCapacity() {
         let card = ANTBMSCardConfiguration(savedFields: ANTBMSCardConfiguration.compactFields.map(\.rawValue))
-        XCTAssertEqual(card.lines(for: reading()), ["蚂蚁  78%  82.78V  压差 6mV"])
+        XCTAssertEqual(card.lines(for: reading()), ["蚂蚁  78%  82.78V", "压差 6mV  131.92/170.0A"])
+    }
+
+    func testLegacySixFieldPreferencesGainCapacityOnce() {
+        let legacy = ANTBMSCardConfiguration(savedFields: ["charge", "voltage", "temperature",
+                                                           "current", "power", "cellDelta"])
+        XCTAssertEqual(legacy.fields.count, 7)
+        XCTAssertEqual(legacy.fields.last, .capacity)
+    }
+
+    func testCapacityFieldShowsRemainingOverTotalAndNeverFakesMissingValues() {
+        XCTAssertEqual(ANTBMSCardConfiguration.Field.capacity.text(reading()), "131.92/170.0A")
+        var missing = reading()
+        missing.available.remove("remaining")
+        XCTAssertEqual(ANTBMSCardConfiguration.Field.capacity.text(missing), "--/--A")
     }
 
     func testSavedFieldsNormalizeDuplicatesAndUnknownValues() {
